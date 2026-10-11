@@ -1,29 +1,25 @@
-Apache::Request
-Apache::Reload
-CGI 2.47
-Test::Inline
-Carp::Assert
-Class::Fields
+CGI 4.50
+CGI::PSGI
 Class::Accessor
 Class::Data::Inheritable
 Class::Singleton
 Class::Trigger
-Digest::SHA1
+Cpanel::JSON::XS
+Crypt::URandom
+CryptX
+DBI
+Digest::SHA
+Error 0.15
 File::Spec
 File::Temp
 HTML::FillInForm
-HTML::Template
 HTML::StickyQuery
+HTML::Template
 IO::Stringy
 Jcode
-LWP
-Test::Simple
-Test::Harness
+Plack 1.0050
+Storable
+Template
+Test::More 0.98
 Time::HiRes
 URI
-Errno
-Template
-Data::Properties
-Error 0.15
-Storable
-Encode::compat

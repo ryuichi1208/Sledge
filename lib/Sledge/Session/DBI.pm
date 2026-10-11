@@ -17,7 +17,15 @@ sub _connect_database {
     my($self, $page) = @_;
     my $config = $page->create_config;
     my $connect = $ENV{MOD_PERL} ? 'connect' : 'connect_cached';
-    my $dbh = DBI->$connect($config->datasource, $self->connect_attr)
+    my($dsn, $user, $pass) = $config->datasource;
+    # So that child processes of a prefork server do not share the parent's connection,
+    # include the PID in the cache key and do not close the parent's connection when a child exits
+    my %attr = (
+	%{$self->connect_attr},
+	AutoInactiveDestroy => 1,
+	private_sledge_pid  => $$,
+    );
+    my $dbh = DBI->$connect($dsn, $user, $pass, \%attr)
 	or Sledge::Exception::DBConnectionError->throw($DBI::errstr);
     return $dbh;
 }

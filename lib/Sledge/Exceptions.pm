@@ -99,5 +99,24 @@ package Sledge::Exception::LoadingModuleError;
 use base 'Sledge::Exception';
 sub description { 'Error while loading module' }
 
+# Sledge::Config::Env
+package Sledge::Exception::ConfigMissing;
+use base 'Sledge::Exception';
+sub description { 'Required configuration is missing' }
+
+# Sledge::Session
+package Sledge::Exception::SessionSerializeError;
+use base 'Sledge::Exception';
+sub description { 'Session data cannot be (de)serialized' }
+
+# Sledge::SessionManager::EncryptedCookie
+package Sledge::Exception::SessionSecretError;
+use base 'Sledge::Exception';
+sub description { 'Session secret is missing or too short' }
+
+package Sledge::Exception::SessionCookieTooLarge;
+use base 'Sledge::Exception';
+sub description { 'Session data exceeds cookie size limit' }
+
 
 1;

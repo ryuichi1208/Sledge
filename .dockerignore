@@ -1,0 +1,11 @@
+.git
+.github
+k8s
+blib
+pm_to_blib
+Makefile
+Makefile.old
+MYMETA.*
+cover_db
+local
+*.gz

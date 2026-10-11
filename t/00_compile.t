@@ -13,7 +13,14 @@ my @mod;
 find(\&wanted, 'lib');
 
 plan tests => scalar @mod;
-require_ok $_ for @mod;
+for my $mod (@mod) {
+  SKIP: {
+	# mod_perl 1.x (Apache.pm) is not available for current Perl
+	skip "$mod requires mod_perl 1.x", 1
+	    if $mod eq 'Sledge::Pages::Apache' && !eval { require Apache; 1 };
+	require_ok $mod;
+    }
+}
 
 sub wanted {
     if (/\.pm$/) {

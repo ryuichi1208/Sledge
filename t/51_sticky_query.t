@@ -38,7 +38,7 @@ package main;
     my $p = Mock::Pages->new;
     $p->dispatch('sticky_test');
 
-    like $p->output, qr/<a href="foo\.cgi\?sid=.*">/;
+    like $p->output, qr/<a href="foo\.cgi\?[^"]*\bsid=\w+[^"]*">/;
     like $p->output, qr/<input (?:type="hidden"|name="sid"|value=".*"| )*>/
 }
 

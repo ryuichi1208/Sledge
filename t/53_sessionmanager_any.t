@@ -48,7 +48,7 @@ sub do_test {
     my($sid) = $p->output =~ /sid=(\w+)/;
 
     # does it rewrite HTML?
-    like $p->output, qr/foo\.cgi\?sid=$sid/, "HTML contains $sid in links";
+    like $p->output, qr/foo\.cgi\?[^"]*\bsid=$sid/, "HTML contains $sid in links";
 
     if ($use_cookie) {
 	$ENV{HTTP_COOKIE} = "sid=$sid";
@@ -67,7 +67,7 @@ sub do_test {
     $p3->dispatch("sticky_test");
 
     if ($use_cookie) {
-	unlike $p3->output, qr/foo\.cgi\?sid=$sid/, "no StickyQuery with Cookie enabled";
+	unlike $p3->output, qr/foo\.cgi\?[^"]*\bsid=$sid/, "no StickyQuery with Cookie enabled";
     }
 
     delete $ENV{HTTP_COOKIE};

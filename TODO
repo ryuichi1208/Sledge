@@ -1,30 +1,30 @@
 $Id: TODO,v 1.2 2003/02/17 10:33:45 miyagawa Exp $
 
 [Bug Fix]
-* Sledge::Session::DBI の connection が Pooling されない
-* Apache::Reload を使用すると hook が二重登録される
-* Pages::LivingDead は不要
+* Sledge::Session::DBI connections are not pooled
+* Hooks are registered twice when Apache::Reload is used
+* Pages::LivingDead is unnecessary
 
 [Enhancement]
 * More Document
 * More Samples
-* Install.pm のパッチとりこみ
-* $r->upload->link() を portable に
-* redirect() の先頭に固定パスを付加できるように
-* ページに論理名をつける forward() メソッドを実装
-* セッションの名前空間衝突の制御
-* Exception Handler の実装
+* Merge the patch for Install.pm
+* Make $r->upload->link() portable
+* Allow a fixed path to be prepended in redirect()
+* Implement a forward() method that gives pages logical names
+* Control namespace collisions in sessions
+* Implement an Exception Handler
 
 [Plugins]
-* Dispatcher の公開
-* Plugin::Validation の公開とAPI強化
-* Plugin::Maintenance (メンテナンス中画面)
-* Plugin::Token (ページ遷移強制)
-* Plugin::Payment (決済遷移プラグイン Business::OnlinePayment?)
-* Plugin::PAR (Apache::PAR 対応)
+* Release Dispatcher
+* Release Plugin::Validation and strengthen its API
+* Plugin::Maintenance (under-maintenance page)
+* Plugin::Token (enforce page transitions)
+* Plugin::Payment (payment transition plugin; Business::OnlinePayment?)
+* Plugin::PAR (Apache::PAR support)
 * Plugin::FormMail
-* Plugin::XMLXSLT (XML-XSLT変換)
-* Plugin::CMS (簡易CMSシステム)
+* Plugin::XMLXSLT (XML-XSLT transformation)
+* Plugin::CMS (simple CMS system)
 * Plugin::Wiki (WikiWikiWeb)
 * Plugin::Blog (Weblog)
 

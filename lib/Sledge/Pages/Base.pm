@@ -34,6 +34,7 @@ use Sledge::Exceptions;
 use Sledge::FillInForm;
 use Sledge::Template;
 use Sledge::Registrar;
+use Sledge::Tracing;
 
 # abstract methods
 sub create_authorizer { Sledge::Exception::AbstractMethod->throw }
@@ -52,7 +53,22 @@ sub send_content      { Sledge::Exception::DeprecatedMethod->throw }
 # Formerly implemented via LoadHooks
 use Class::Trigger qw(BEFORE_INIT AFTER_INIT BEFORE_DISPATCH AFTER_DISPATCH AFTER_OUTPUT);
 
-*register_hook = \&add_trigger;
+# Class::Trigger 0.14 and later no longer validate trigger names in subclasses, so validate here.
+# Subclasses that want their own hooks should extend hook_points.
+__PACKAGE__->mk_classdata('hook_points');
+__PACKAGE__->hook_points({
+    map { $_ => 1 } qw(BEFORE_INIT AFTER_INIT BEFORE_DISPATCH AFTER_DISPATCH AFTER_OUTPUT)
+});
+
+sub register_hook {
+    my($self, $when) = @_;
+    unless ($self->hook_points->{$when}) {
+	require Carp;
+	Carp::croak("$when is not valid triggerpoint for " . (ref($self) || $self));
+    }
+    goto &add_trigger;
+}
+
 *invoke_hook   = \&call_trigger;
 
 sub new {
@@ -85,22 +101,40 @@ sub dispatch {
 	$self->invoke_hook('BEFORE_DISPATCH') unless $self->finished;
 	if ($self->is_post_request && ! $self->finished) {
 	    my $postmeth = 'post_dispatch_' . $page;
-	    $self->$postmeth() if $self->can($postmeth);
+	    $self->_call_page_method($postmeth) if $self->can($postmeth);
 	}
 	unless ($self->finished) {
 	    my $method = 'dispatch_' . $page;
-	    $self->$method();
+	    $self->_call_page_method($method);
 	    $self->invoke_hook('AFTER_DISPATCH');
 	}
 	$self->output_content unless $self->finished;
     };
     $self->handle_exception($@) if $@;
-    $self->_destroy_me;
+    # Saving the session (Session::DESTROY) happens here
+    $Sledge::Tracing::Enabled
+	? Sledge::Tracing->in_span('Sledge session save', {}, sub { $self->_destroy_me })
+	: $self->_destroy_me;
+}
+
+# Avoid extra stack frames when tracing is disabled
+sub _call_page_method {
+    my($self, $method) = @_;
+    return $self->$method() unless $Sledge::Tracing::Enabled;
+    Sledge::Tracing->in_span("Sledge $method", {
+	'code.namespace' => ref $self,
+	'code.function'  => $method,
+    }, sub { $self->$method() });
 }
 
 sub handle_exception {
     my($self, $E) = @_;
     die $E;
+}
+
+sub logger {
+    require Sledge::Logger;
+    return Sledge::Logger->default;
 }
 
 sub debug_level {
@@ -112,7 +146,11 @@ sub debug_level {
 sub init_dispatch {
     my($self, $page) = @_;
     $self->page($page);
-    $self->construct_session unless defined $self->session;
+    unless (defined $self->session) {
+	$Sledge::Tracing::Enabled
+	    ? Sledge::Tracing->in_span('Sledge session load', {}, sub { $self->construct_session })
+	    : $self->construct_session;
+    }
     $self->authorizer->authorize($self);
     $self->charset->convert_param($self);
     $self->load_template($page);
@@ -122,7 +160,11 @@ sub init_dispatch {
 sub output_content {
     my $self = shift;
     $self->r->content_type($self->charset->content_type); # set
-    my $content = $self->make_content;
+    my $content = $Sledge::Tracing::Enabled
+	? Sledge::Tracing->in_span('Sledge render', {
+	    'sledge.template' => $self->tmpl ? $self->tmpl->{_options}->{filename} : undef,
+	}, sub { $self->make_content })
+	: $self->make_content;
     $self->set_content_length(length $content);
     $self->send_http_header;
     $self->r->print($content);
@@ -132,6 +174,11 @@ sub output_content {
 
 sub send_http_header {
     my $self = shift;
+    # Session managers that store the session in a cookie write it out before the headers are sent
+    my $manager = $self->manager;
+    if ($manager && $self->session && $manager->can('finalize_session')) {
+	$manager->finalize_session($self, $self->session);
+    }
     $self->r->send_http_header(@_);
 }
 

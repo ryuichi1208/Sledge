@@ -33,12 +33,15 @@ sub _select_me {
 
 sub _do_lock { }
 
+# Storable is wrapped in base64 to fit a TEXT column (JSON is stored as is)
 sub _serialize {
     my($self, $data) = @_;
-    return encode_base64(Storable::freeze($data));
+    my $serialized = $self->SUPER::_serialize($data);
+    return $Sledge::Session::Serializer eq q(Storable)
+	? encode_base64($serialized) : $serialized;
 }
 
-sub _deserialize {
+sub _thaw_legacy {
     my($self, $data) = @_;
     return Storable::thaw(decode_base64($data));
 }

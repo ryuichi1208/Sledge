@@ -88,6 +88,8 @@ sub upload {
 
 sub param {
     my $self = shift;
+    # This API returns lists like Apache::Request does, so silence CGI.pm's warning
+    local $CGI::LIST_CONTEXT_WARN = 0;
 
     # $r->param(foo => \@bar);
     if (@_ == 2 && ref($_[1]) eq 'ARRAY') {

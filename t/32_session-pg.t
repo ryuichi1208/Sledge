@@ -62,7 +62,9 @@ sub create_config {
 
 package Mock::Config;
 sub datasource {
-    return 'dbi:Pg:dbname=template1', 'pg', '';
+    return $ENV{SLEDGE_TEST_PG_DSN} || 'dbi:Pg:dbname=template1',
+	$ENV{SLEDGE_TEST_PG_USER} || 'pg',
+	$ENV{SLEDGE_TEST_PG_PASSWORD} || '';
 }
 
 package main;

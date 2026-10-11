@@ -6,14 +6,25 @@ package Sledge::Session;
 #
 
 use strict;
-use Digest::SHA1 qw(sha1_hex);
+use Cpanel::JSON::XS ();
+use Crypt::URandom ();
 use Storable;
-use Time::HiRes qw(gettimeofday);
 
 use Sledge::Exceptions;
 
-use vars qw($SessionIdLength);
+use vars qw($SessionIdLength $Serializer $AllowLegacyStorable);
 $SessionIdLength = 32;
+
+# Format for stored session data: 'JSON' (default) or 'Storable'.
+# JSON does not depend on the Perl version, and tampered data cannot lead to code execution.
+# Applications that store objects or code references should use 'Storable'.
+$Serializer = 'JSON';
+
+# Also read sessions stored with Storable before the switch to JSON.
+# Set this to 0 once the migration period is over.
+$AllowLegacyStorable = 1;
+
+my $JSON = Cpanel::JSON::XS->new->utf8->canonical->allow_nonref;
 
 sub sid_length { $SessionIdLength }
 
@@ -50,18 +61,45 @@ sub _load_session {
 
 sub _gen_session_id {
     my $self = shift;
-    my $unique = $ENV{UNIQUE_ID} || [] . rand();
-    return substr(sha1_hex(gettimeofday . $unique), 0, $self->sid_length);
+    # Generate from the OS's cryptographically secure random source (/dev/urandom etc.) so it cannot be guessed
+    my $length = $self->sid_length;
+    my $hex = unpack 'H*', Crypt::URandom::urandom(int(($length + 1) / 2));
+    return substr($hex, 0, $length);
 }
 
 sub _deserialize {
     my($self, $data) = @_;
-    return Storable::thaw($data);
+    return {} unless defined $data && length $data;
+    if ($data =~ /^\s*\{/) {
+	my $decoded = eval { $JSON->decode($data) };
+	Sledge::Exception::SessionSerializeError->throw("invalid session JSON: $@") if $@;
+	return $decoded;
+    }
+    unless ($AllowLegacyStorable) {
+	Sledge::Exception::SessionSerializeError->throw(
+	    'legacy Storable session found but $Sledge::Session::AllowLegacyStorable is off',
+	);
+    }
+    return $self->_thaw_legacy($data);
 }
 
 sub _serialize {
     my($self, $data) = @_;
-    return Storable::nfreeze($data);
+    return Storable::nfreeze($data) if $Serializer eq 'Storable';
+    my $encoded = eval { $JSON->encode($data) };
+    if ($@) {
+	Sledge::Exception::SessionSerializeError->throw(
+	    "session data cannot be stored as JSON (objects and code refs are not supported; "
+	    . "set \$Sledge::Session::Serializer = 'Storable' to keep them): $@",
+	);
+    }
+    return $encoded;
+}
+
+# Reads data in the old (Storable) format. Stores that wrap it (e.g. in base64) override this.
+sub _thaw_legacy {
+    my($self, $data) = @_;
+    return Storable::thaw($data);
 }
 
 sub _transaction { }

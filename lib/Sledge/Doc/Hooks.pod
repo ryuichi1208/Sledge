@@ -1,14 +1,14 @@
 =head1 NAME
 
-Sledge::Doc::Hooks - Sledge Hooks の使い方
+Sledge::Doc::Hooks - How to use Sledge Hooks
 
 =head1 DESCRIPTION
 
-Sledge の Hook の利用法について解説しています。
+This document explains how to use hooks in Sledge.
 
 =head1 HOOKS
 
-現時点で利用可能な hook フェーズは以下の通り
+The hook phases currently available are:
 
   AFTER_INIT
   BEFORE_DISPATCH
@@ -17,9 +17,9 @@ Sledge の Hook の利用法について解説しています。
 
 =head1 REGISTERING HOOKS
 
-hook はクラスの継承、インスタンスごとの hook に対応しています。従来の 
-after_dispatch のような使い方をするには、クラスメソッドとして hook を
-登録します。
+Hooks support class inheritance as well as per-instance hooks. To use
+them the way the old after_dispatch was used, register the hook as a
+class method.
 
   package Test::Pages::Bar;
 
@@ -30,28 +30,28 @@ after_dispatch のような使い方をするには、クラスメソッドとして hook を
       },
   );
 
-のようにできます。hook に渡ってくる引数は、実行時の Pages のインスタン
-スです。１つのフェーズに複数のサブルーチンを登録した場合、順番に実行さ
-れます。
+You can do it like this. The argument passed to the hook is the Pages
+instance at run time. If you register multiple subroutines for one
+phase, they are executed in order.
 
-ここで登録した hook は、Test::Pages::Bar を継承したクラスすべてで有効
-になります。
+A hook registered here is effective in every class that inherits from
+Test::Pages::Bar.
 
-ある Pages インスタンスだけで hook を有効にしたい場合は、オブジェクト
-メソッドとして呼び出します。
+If you want a hook to be effective only for a particular Pages instance,
+call it as an object method.
 
   sub dispatch_login {
       my $self = shift;
       $self->regiter_hook(AFTER_DISPATCH => sub { warn "OK" });
   }
 
-この場合、他の dispatch_* メソッドでは影響がありません。dispatch_* の
-中からクラスメソッドの register_hook を実行してしまうと、hook がどんど
-ん push されるので注意して下さい。
+In this case the other dispatch_* methods are not affected. Be careful:
+if you call register_hook as a class method from inside dispatch_*,
+hooks keep getting pushed one after another.
 
-VERSION 0.16 以降では、より汎用化された Class::Trigger への thin
-wrapper として動作しています。Class::Trigger のドキュメントやソースコー
-ドも参考にしてください。
+Since VERSION 0.16 this works as a thin wrapper around the more general
+Class::Trigger. See also the Class::Trigger documentation and source
+code.
 
 =head1 AUTHOR
 

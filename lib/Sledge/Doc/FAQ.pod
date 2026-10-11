@@ -4,7 +4,7 @@ Sledge::Doc::FAQ - Sledge FAQ
 
 =head1 DESCRIPTION
 
-Sledge よくある質問と答え
+Sledge frequently asked questions and answers
 
 =head1 QUESTIONS
 
@@ -14,28 +14,29 @@ Sledge よくある質問と答え
 
 =item Q.
 
-CPAN shell が perl 5.6.1 をインストールしようとする。
+The CPAN shell tries to install perl 5.6.1.
 
 =item A.
 
-CPAN モジュールを最新にしてください。
+Upgrade the CPAN module to the latest version.
 
   cpan> look CPAN
   # perl Makefile.PL ; make install
   # exit
-  cpan> reload cpan 
+  cpan> reload cpan
 
 =item Q.
 
-CGI環境で利用できるか
+Can it be used in a CGI environment?
 
 =item A.
 
-0.03 以降で利用できます。Pages ベースクラスで、
+Yes, since 0.03. In your Pages base class, do
 
   use Sledge::Pages::Compat;
 
-のようにしてください。環境変数にあわせて、どちらかを自動で継承します。
+It automatically inherits from one or the other depending on the
+environment variables.
 
 =back
 
@@ -45,139 +46,137 @@ CGI環境で利用できるか
 
 =item Q.
 
-ひとつのサーバで、複数の Sledge プロジェクトを利用できるか
+Can multiple Sledge projects be used on one server?
 
 =item A.
 
-できます。
+Yes.
 
-mod_perl 環境でも、プロジェクトの名前がことなっていれば、問題なく動作
-します。CGI版でもとくに問題ありません。
+Even under mod_perl, it works without problems as long as the project
+names are different. The CGI version has no particular problems either.
 
 =item Q.
 
-HTTP - HTTPS 間でのリダイレクトさせたい。
+I want to redirect between HTTP and HTTPS.
 
 =item A.
 
-redirect() メソッドの第2引数に scheme (http || https) を追加すると、そ
-のスキームにリダイレクトします。パスの変換などが必要な場合は、
-redirect() や current_url() をオーバーライドしてください。
+If you add a scheme (http || https) as the second argument of the
+redirect() method, it redirects to that scheme. If you need things like
+path conversion, override redirect() or current_url().
 
-=item Q. FillInForm を止めたい
+=item Q. I want to stop FillInForm
 
 =item A.
 
-fillin_form() アクセサで false をセットする。
+Set false with the fillin_form() accessor.
 
-デフォルトでは、$r->method eq 'POST' の場合に fillin_form が有効になり
-ます。無効にするには、$self->fillin_form(undef); を明示的に呼び出しま
-す。dispatch_* のどこで実行してもOKです。
+By default, fillin_form is enabled when $r->method eq 'POST'. To disable
+it, explicitly call $self->fillin_form(undef);. It is OK to run it
+anywhere in dispatch_*.
 
-利用するクラス内の全 dispatch_* メソッドでとめたい場合は、
+If you want to stop it for all dispatch_* methods in the class that uses
+it, do
 
   sub fillin_form { undef }
 
-としてください。
-
 =item Q.
 
-ページ内にいくつかフォームが存在するが、FillInForm で埋め込むフォーム
-は1個だけにしたい。
+There are several forms in the page, but I want FillInForm to fill in
+only one of them.
 
 =item A.
 
-fillin_form() インスタンスの属性にセットします。
+Set it on the attributes of the fillin_form() instance.
 
-Sledge::FillInForm のインスタンスを、fillin_form 属性にもっています。
+The fillin_form attribute holds an instance of Sledge::FillInForm.
 
   $self->fillin_form->target('foo');
 
-と呼び出すと、E<lt>FORM name="foo"E<gt> な FORM のみがFillin の対象に
-なります。
+If you call this, only the FORM E<lt>FORM name="foo"E<gt> is targeted
+by Fillin.
 
-ただ、上記を GET のときに実行すると、以下のようなエラーがでます。
+However, if you run the above on GET, you get an error like this:
 
   Can't call method "target" on an undefined value at ...
 
-これはデフォルトで GET の場合は fillin しないようになっているためで、
-GET でこの文がランタイムエラーにならないためには、load_fillin_form() 
-を先に呼び出しておいて POST と同じ状態にしておく、もしくは、
+This is because by default fillin is not done for GET. To keep this
+statement from becoming a runtime error on GET, either call
+load_fillin_form() first to put things in the same state as POST, or do
 
   $self->fillin_form->target('main') if defined $self->fillin_form;
 
-としてください。
-
 =item Q.
 
-FillInForm に渡す foject を追加したい。
+I want to add a foject to pass to FillInForm.
 
 =item A.
 
-fillin_form->add_fobjet() メソッドで追加できます。
+You can add one with the fillin_form->add_fobjet() method.
 
   $self->fillin_form->add_fobject($fobject);
 
-これも上記同様、GET でエラーにならないよう注意してください。
+As above, be careful that this does not cause an error on GET.
 
 =item Q.
 
-GET のときに fillin_form を有効にしたい。
+I want to enable fillin_form on GET.
 
 =item A.
 
-load_fillin_form() を明示的に呼び出すと、POST と同様の状態になります。
+If you explicitly call load_fillin_form(), you get the same state as
+POST.
 
   $self->load_fillin_form();
 
 =item Q.
 
-対応するテンプレートファイルが存在しない .cgi をつくってもよいか
+Is it OK to make a .cgi that has no corresponding template file?
 
 =item A.
 
-問題ありません。
+No problem.
 
-ただし、dispatch() が終了するまでに、load_template() もしくは 
-redirect() を実行する必要があります。そうしないと、最後の tmpl->output 
-で例外が発生します。
+However, you must run load_template() or redirect() before dispatch()
+finishes. Otherwise an exception occurs in the final tmpl->output.
 
 =item Q.
 
-セッション管理は必要ない
+I do not need session management
 
 =item A.
 
-construct_session をオーバーライドしてください。
+Override construct_session.
 
   package YourProject::Pages;
   sub construct_session { }
 
 =item Q.
 
-upload ファイルを扱うには
+How do I handle uploaded files?
 
 =item A.
 
-mod_perl 環境, CGI 環境とも $self->r->upload('uploadname') でUpload オ
-ブジェクトが取得でき、そこから fh メソッドにてハンドルが取得できます。
+In both the mod_perl and CGI environments, you can get an Upload object
+with $self->r->upload('uploadname'), and get a handle from it with the
+fh method.
 
   my $upload = $self->r->upload('uploadfile');
   $upload->link("/path/to/savefile");
   my $fh = $upload->fh;
   while (<$fh>) { do_something($fh); }
 
-詳細は perldoc Apache::Request, perldoc CGI をみてください。
+For details see perldoc Apache::Request and perldoc CGI.
 
 =item Q.
 
-ファイルダウンロードをさせるプログラムを書くにはどうすればいいか
+How do I write a program that lets the user download a file?
 
 =item A.
 
-テンプレートを出さず、また HTTP ヘッダを自前で出力する必要があります。
-$data に含まれた pdf データをダウンロードさせるサンプルを以下に示しま
-す。
+You must not output a template, and you must output the HTTP headers
+yourself. Below is a sample that lets the user download the PDF data
+contained in $data.
 
   sub dispatch_download {
       my $self = shift;
@@ -190,42 +189,43 @@ $data に含まれた pdf データをダウンロードさせるサンプルを以下に示しま
       $self->finished(1);
   }
 
-finished() を呼び出して、後処理であるヘッダ、テンプレート出力を回避します。
+Call finished() to skip the post-processing, that is, the header and
+template output.
 
 =item Q.
 
-MySQL の sessions テーブルが肥大化するが、そういうものですか
+The MySQL sessions table keeps growing. Is that expected?
 
 =item A.
 
-そういうものです。timestamp カラムをつけて、以下のようなSQL文で定期的
-にクリーンアップするとよいでしょう。
+Yes, it is. Add a timestamp column and clean up periodically with an SQL
+statement like the following.
 
   DELETE FROM sessions WHERE timestamp < SUBDATE(NOW(), INTERVAL 2 HOUR)
 
 =item Q.
 
-dispatch_fooが終わった時点でセッションデータを削除したいのですが
+I want to delete session data when dispatch_foo finishes
 
 =item A.
 
-AFTER_DISPATCH フックに追加して下さい。
+Add it to the AFTER_DISPATCH hook.
 
   $self->register_hook(AFTER_DISPATCH => sub {
       my $self = shift;
       $self->session->remove('foo');
   });
 
-くわしくは Sledge::Doc::Hooks をみてください。
+See Sledge::Doc::Hooks for details.
 
 =item Q.
 
-独自に Cookie を使いたい
+I want to use my own cookies
 
 =item A.
 
-セッションで解決できない永続 Cookie を使う場合は、header_out でセット
-できます。
+To use persistent cookies that sessions cannot handle, you can set them
+with header_out.
 
   use CGI::Cookie;
   my $cookie = CGI::Cookie->new({ ... });
@@ -233,42 +233,41 @@ AFTER_DISPATCH フックに追加して下さい。
 
 =item Q.
 
-別ディレクトリのテンプレートを読みこむには?
+How do I load a template from another directory?
 
 =item A.
 
-エラー発生したら、共通のエラー画面 $TMPL_PATH/error.html を読みこみた
-い、というケースがあると思います。load_template() メソッドでテンプレー
-トの中身をすり替えることができますが、
+You may want to load a common error page, $TMPL_PATH/error.html, when
+an error occurs. You can swap the template contents with the
+load_template() method, but with something like
 
   $self->load_template('../error');
 
-などと、カレントディレクトリを意識しなくてはいけません。/ から記述すれ
-ば、virtual パスとして読みこめます。
+you have to be aware of the current directory. If you write it starting
+from /, it is loaded as a virtual path.
 
   sub display_error {
       my $self = shift;
       $self->load_template('/error');
   }
 
-この場合、Config の TMPL_PATH 直下の error.html が読みこまれます。
+In this case, error.html directly under the Config TMPL_PATH is loaded.
 
 =item Q.
 
-GET/POST で処理をわけたい。
+I want to handle GET and POST differently.
 
 =item A.
 
-POST アクセスの場合は、post_dispatch_foo が先に実行されます。
+For a POST access, post_dispatch_foo is run first.
 
 =item Q.
 
-post_dispatch_foo のあとに、dispatch_foo を実行したくない。
+I do not want dispatch_foo to run after post_dispatch_foo.
 
 =item A.
 
-C<output_content> メソッドを呼び出してください。C<finished(1)> は不要
-です。
+Call the C<output_content> method. C<finished(1)> is not needed.
 
   sub post_dispatch_foo {
       my $self = shift;
@@ -277,30 +276,33 @@ C<output_content> メソッドを呼び出してください。C<finished(1)> は不要
 
 =item Q.
 
-POST メソッドが事情により使えないのだけど、処理は分岐させたい。
+For some reason I cannot use the POST method, but I still want to branch
+the processing.
 
 =item A.
 
-is_post_request メソッドをオーバーライドしてください。
+Override the is_post_request method.
 
   sub is_post_request {
       my $self = shift;
       return $self->r->param('.post');
   }
 
-この場合 foo.cgi?.post=1 なら POSTメソッドと見なされます。
+In this case, foo.cgi?.post=1 is treated as the POST method.
 
 
 =item Q.
 
-FillinForm に param() を実装したオブジェクトではなく、ハッシュを渡したい
+I want to pass a hash to FillinForm instead of an object that implements
+param()
 
 =item A.
 
+Do
+
   $self->fillin_form->fdat(\%fdat);
 
-としてください。fdat をセットした場合、object は無視されるので注意して
-ください。
+Note that when fdat is set, the object is ignored.
 
 =back
 
@@ -310,51 +312,50 @@ FillinForm に param() を実装したオブジェクトではなく、ハッシュを渡したい
 
 =item Q.
 
-こんなエラーがでます。
+I get an error like this.
 
-  Can't use string ("Foo::Config") as a HASH ref while "strict refs" 
+  Can't use string ("Foo::Config") as a HASH ref while "strict refs"
   in use at /usr/local/lib/perl5/site_perl/5.005/Sledge/Config.pm line 40.
 
 =item A.
 
-Class::Singleton モジュールがインストールされているか確認してください。
-そうでなければ、Foo::Config モジュールの呼び出し方が間違っています。
+Check that the Class::Singleton module is installed. If it is, the way
+you call the Foo::Config module is wrong.
 
 =item Q.
 
-こんなエラーがでます。
+I get an error like this.
 
   Can't call method "param" on an undefined value at
   /usr/local/apache/site_perl/HelloWorld/Pages/Index.pm line 6.
 
 =item A.
 
-該当行が
+If the line in question is
 
   $self->tmpl->param()
 
-となっているのであれば、テンプレートファイルがロードできていません。テ
-ンプレートパスとファイル名が正しいか確認してください。
+then the template file could not be loaded. Check that the template path
+and file name are correct.
 
 =item Q.
 
-Config の内容が反映されない。Apache::StatINC を使っているのだが。
+Changes to the Config are not reflected. I am using Apache::StatINC.
 
 =item A.
 
-Class::Singleton が原因です。Class::Singleton のかわりに 
-Apache::Singleton を継承すると、リクエストごとにインスタンスをクリアす
-るようになります。若干パフォーマンスは下がりますが、ほとんど影響はない
-でしょう。
+Class::Singleton is the cause. If you inherit from Apache::Singleton
+instead of Class::Singleton, the instance is cleared on every request.
+Performance drops slightly, but the impact should be negligible.
 
 =item Q.
 
-テンプレートでセットした hidden などの FORM 値が、POST された値で上書
-きされてしまう。
+FORM values such as hidden fields set in the template get overwritten by
+the POSTed values.
 
 =item A.
 
-上記 fillin_form の項目をみてください。
+See the fillin_form items above.
 
 =back
 
