@@ -40,6 +40,30 @@ spec:
           labelSelector:
             matchLabels:
               app.kubernetes.io/name: sledge
+      # Admin process (XII): apply migrations with the same image and configuration
+      # before the new code starts. Concurrent runs from several pods are serialized
+      # by a database lock; without SLEDGE_DSN it does nothing.
+      initContainers:
+        - name: migrate
+          image: sledge
+          command: ["perl", "/app/eg/psgi/admin.pl", "migrate"]
+          envFrom:
+            - configMapRef:
+                name: sledge
+            - secretRef:
+                name: sledge-db
+                optional: true
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
       containers:
         - name: sledge
           image: sledge

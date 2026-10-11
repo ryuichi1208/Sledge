@@ -16,7 +16,7 @@ x-dev: &dev
     - .:/app
 
 x-app-env: &app-env
-  PERL5LIB: /app/lib
+  PERL5LIB: /app/lib:/opt/carton/lib/perl5
   SLEDGE_DSN: dbi:mysql:database=sledge;host=mysql;mysql_ssl=1
   SLEDGE_DB_USER: sledge
   SLEDGE_DB_PASSWORD: sledge
@@ -41,9 +41,20 @@ services:
       valkey:
         condition: service_healthy
 
+  # One-off admin process: applies migrations before the app starts
+  migrate:
+    <<: *dev
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment: *app-env
+    command: perl eg/psgi/admin.pl migrate
+
   app:
     <<: *dev
     depends_on:
+      migrate:
+        condition: service_completed_successfully
       mysql:
         condition: service_healthy
       valkey:

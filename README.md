@@ -26,6 +26,7 @@ docker compose run --rm dev bash          # shell
 ```
 
 The `app` service runs `plackup -R`, so changes under `lib/` and `eg/psgi/` are reloaded automatically.
+Before it starts, the one-off `migrate` service applies the database migrations.
 Sessions are stored in Valkey, and traces can be viewed in the Jaeger UI (http://localhost:16686).
 
 ## Production image
@@ -86,9 +87,47 @@ Appending `_FILE` to any variable reads the value from that file (for example `S
 
 When connecting to MySQL 8.4 or later, add `mysql_ssl=1` to the DSN
 (`caching_sha2_password` authentication requires TLS).
-Make the `a_session` column `MEDIUMBLOB` (see `eg/docker/mysql-init/01-sessions.sql`).
+Make the `a_session` column `MEDIUMBLOB`; the migrations in `eg/psgi/migrations` create the session tables.
 
 ## Cloud-native features
+
+### Dependencies: `cpanfile.snapshot`
+
+`cpanfile` declares the dependencies and `cpanfile.snapshot` pins the exact version of every
+distribution (including indirect ones). The images install from the snapshot with
+`carton install --deployment` into `/opt/carton`, so every build gets the same modules.
+To change dependencies, edit `cpanfile`, run `carton install`, and commit both files.
+
+### Releases: `scripts/release`
+
+The image tag is the git revision, so each deployment names exactly one build:
+
+```sh
+scripts/release kind                              # build sledge:<rev>, load it into kind, deploy k8s/local
+scripts/release push ghcr.io/ryuichi1208/sledge   # build and push <repo>:<rev>, set the tag in k8s/base
+```
+
+The script refuses to build from a working tree with uncommitted changes. The revision is also
+stored in the image (`org.opencontainers.image.revision` label and `SLEDGE_RELEASE`), added to
+every log line as `release`, and reported to OpenTelemetry as `service.version`.
+
+### Admin processes: `eg/psgi/admin.pl`
+
+One-off tasks run with the same image and configuration as the app:
+
+```sh
+perl eg/psgi/admin.pl migrate                 # apply pending migrations (Sledge::Migration)
+perl eg/psgi/admin.pl migrate-status
+perl eg/psgi/admin.pl session-cleanup 1440    # RDB session stores only
+perl eg/psgi/admin.pl config-check            # load the configuration and reach the backing services
+
+kubectl -n sledge exec deploy/sledge -- perl eg/psgi/admin.pl migrate-status
+```
+
+`Sledge::Migration` applies `NNN_name.sql` (or `NNN_name.<driver>.sql`) files in order and records them
+in `schema_migrations`. On Kubernetes, an init container runs `migrate` before the new code starts;
+runs from several pods are serialized with a database lock. A suspended CronJob
+(`sledge-session-cleanup`) cleans up RDB session stores when enabled.
 
 ### Configuration: `Sledge::Config::Env`
 

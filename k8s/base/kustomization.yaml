@@ -7,11 +7,14 @@ resources:
   - service.yaml
   - pdb.yaml
   - ws.yaml
+  - session-cleanup.yaml
 
+# The tag is the git revision of the release. scripts/release sets it; do not use
+# a moving tag such as "latest", so that every deployment names one exact build.
 images:
   - name: sledge
     newName: ghcr.io/ryuichi1208/sledge
-    newTag: latest
+    newTag: unreleased
 
 configMapGenerator:
   - name: sledge

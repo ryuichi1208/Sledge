@@ -31,7 +31,7 @@ sub setup {
 
     OpenTelemetry::SDK->configure_propagators;
 
-    my $provider = OpenTelemetry::SDK::Trace::TracerProvider->new;
+    my $provider = OpenTelemetry::SDK::Trace::TracerProvider->new($class->_resource_args);
     if (my $exporter = $opt{exporter} || $class->_exporter_from_env) {
 	$Processor = Sledge::Tracing::SpanProcessor->new(exporter => $exporter);
 	$provider->add_span_processor($Processor);
@@ -45,6 +45,18 @@ sub setup {
 
     $Enabled = 1;
     return $provider;
+}
+
+# Report the release (SLEDGE_RELEASE, the git revision baked into the image)
+# as service.version, unless OTEL_RESOURCE_ATTRIBUTES already sets one
+sub _resource_args {
+    my $release = $ENV{SLEDGE_RELEASE};
+    return unless defined $release && length $release;
+    return if ($ENV{OTEL_RESOURCE_ATTRIBUTES} || '') =~ /(?:^|,)\s*service\.version=/;
+    require OpenTelemetry::SDK::Resource;
+    return (resource => OpenTelemetry::SDK::Resource->new(
+	attributes => { 'service.version' => $release },
+    ));
 }
 
 sub _exporter_from_env {

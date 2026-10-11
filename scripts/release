@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Builds a release whose image tag is the git revision, then deploys it.
+# Every deployment therefore names exactly one build, and rolling back means
+# deploying an older revision.
+#
+#   scripts/release kind                 build sledge:<rev>, load it into kind, apply k8s/local
+#   scripts/release push <repository>    build <repository>:<rev>, push it, set the tag in k8s/base
+#
+# The working tree must be clean (ALLOW_DIRTY=1 builds anyway, tagged "-dirty").
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
+case "${1:-}" in
+  kind|push) ;;
+  *) usage; exit 1 ;;
+esac
+
+dirty=""
+if [ -n "$(git status --porcelain)" ]; then
+  if [ -z "${ALLOW_DIRTY:-}" ]; then
+    echo "error: uncommitted changes; a release must be built from a commit (ALLOW_DIRTY=1 to override)" >&2
+    exit 1
+  fi
+  dirty="-dirty"
+fi
+rev="$(git rev-parse --short=12 HEAD)$dirty"
+revision="$(git rev-parse HEAD)$dirty"
+
+build() {
+  docker build \
+    --build-arg GIT_REVISION="$revision" \
+    --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -t "$1" .
+}
+
+case "${1:-}" in
+  kind)
+    cluster="${KIND_CLUSTER:-sledge}"
+    context="kind-$cluster"
+    image="sledge:$rev"
+    build "$image"
+    kind load docker-image "$image" --name "$cluster"
+    # k8s/local refers to sledge:local; point it at this release
+    kubectl kustomize k8s/local \
+      | sed "s#image: sledge:local\$#image: $image#" \
+      | kubectl --context "$context" apply -f -
+    for deploy in sledge sledge-ws; do
+      kubectl --context "$context" -n sledge rollout status "deploy/$deploy" --timeout=300s
+    done
+    echo "released $image to $context"
+    ;;
+  push)
+    repository="${2:?usage: scripts/release push <repository>}"
+    build "$repository:$rev"
+    docker push "$repository:$rev"
+    sed -i.bak -E \
+      -e "s#^([[:space:]]+newName:[[:space:]]+).*#\\1$repository#" \
+      -e "s#^([[:space:]]+newTag:[[:space:]]+).*#\\1$rev#" \
+      k8s/base/kustomization.yaml
+    rm -f k8s/base/kustomization.yaml.bak
+    echo "k8s/base now deploys $repository:$rev; commit it, then: kubectl apply -k k8s/base"
+    ;;
+  *)
+    usage
+    exit 1
+    ;;
+esac
