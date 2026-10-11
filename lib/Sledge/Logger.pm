@@ -24,6 +24,7 @@ my $Default;
 # Logger shared by the whole application
 #   SLEDGE_LOG_LEVEL  : debug / info (default) / warn / error / fatal
 #   SLEDGE_LOG_FORMAT : json (default) / text
+#   SLEDGE_RELEASE    : added to every line as "release" (set by the image build)
 sub default {
     my $class = shift;
     $Default = shift if @_;
@@ -39,7 +40,10 @@ sub new {
 	level  => $level,
 	format => $format,
 	fh     => $opt{fh} || \*STDERR,
-	fields => $opt{fields} || {},
+	fields => {
+	    (length($ENV{SLEDGE_RELEASE} // '') ? (release => $ENV{SLEDGE_RELEASE}) : ()),
+	    %{ $opt{fields} || {} },
+	},
     }, $class;
 }
 

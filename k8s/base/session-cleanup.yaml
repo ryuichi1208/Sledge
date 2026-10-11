@@ -1,0 +1,49 @@
+# Admin process (XII): delete idle sessions from an RDB session store.
+# Redis / Valkey and encrypted-cookie sessions expire on their own, so this is
+# suspended by default; set suspend: false when SLEDGE_SESSION_STORE=dbi.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: sledge-session-cleanup
+spec:
+  schedule: "17 * * * *"
+  suspend: true
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      ttlSecondsAfterFinished: 86400
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+          enableServiceLinks: false
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: session-cleanup
+              image: sledge
+              command: ["perl", "/app/eg/psgi/admin.pl", "session-cleanup", "1440"]
+              envFrom:
+                - configMapRef:
+                    name: sledge
+                - secretRef:
+                    name: sledge-db
+                    optional: true
+              resources:
+                requests:
+                  cpu: 50m
+                  memory: 64Mi
+                limits:
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]

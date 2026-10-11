@@ -32,6 +32,7 @@ RUN curl -fsSL -o perl.tar.gz "https://www.cpan.org/src/5.0/perl-${PERL_VERSION}
 
 ENV PATH=/opt/perl/bin:$PATH
 RUN curl -fsSL https://cpanmin.us | perl - --notest App::cpanminus \
+ && cpanm --notest --quiet Carton \
  && rm -rf /root/.cpanm
 
 ############################################################
@@ -44,10 +45,15 @@ RUN apt-get update \
       libmysqlclient-dev libpq-dev \
  && rm -rf /var/lib/apt/lists/*
 
+# Install exactly the versions pinned in cpanfile.snapshot (run `carton install`
+# to update it). Installed outside /app so the dev bind mount does not hide them.
+ENV PERL_CARTON_PATH=/opt/carton
 WORKDIR /app
-COPY cpanfile ./
-RUN cpanm --notest --quiet --installdeps --with-all-features . \
- && rm -rf /root/.cpanm
+COPY cpanfile cpanfile.snapshot ./
+RUN carton install --deployment \
+ && rm -rf /root/.cpanm /opt/carton/cache
+ENV PATH=/opt/carton/bin:$PATH \
+    PERL5LIB=/opt/carton/lib/perl5
 
 ############################################################
 # Development image: includes test tools and database clients
@@ -59,11 +65,11 @@ RUN apt-get update \
       git less vim-tiny sqlite3 default-mysql-client postgresql-client \
  && rm -rf /var/lib/apt/lists/*
 
-RUN cpanm --notest --quiet --installdeps --with-develop --with-all-features . \
- && cpanm --notest --quiet Perl::Tidy Devel::Cover \
+# Development-only tools (not part of the pinned runtime dependencies)
+RUN cpanm --notest --quiet Perl::Tidy Devel::Cover \
  && rm -rf /root/.cpanm
 
-ENV PERL5LIB=/app/lib
+ENV PERL5LIB=/app/lib:/opt/carton/lib/perl5
 CMD ["bash"]
 
 ############################################################
@@ -79,8 +85,9 @@ RUN apt-get update \
  && useradd --system --uid 10001 --gid sledge --home-dir /app --shell /usr/sbin/nologin sledge
 
 COPY --from=deps /opt/perl /opt/perl
-ENV PATH=/opt/perl/bin:$PATH \
-    PERL5LIB=/app/lib
+COPY --from=deps /opt/carton /opt/carton
+ENV PATH=/opt/carton/bin:/opt/perl/bin:$PATH \
+    PERL5LIB=/app/lib:/opt/carton/lib/perl5
 
 WORKDIR /app
 # The source stays owned by root (read-only for the runtime user)
@@ -96,6 +103,15 @@ EXPOSE 5000 5001
 ENV SLEDGE_PSGI=/app/eg/psgi/app.psgi \
     SLEDGE_WORKERS=4 \
     SLEDGE_MAX_REQS_PER_CHILD=1000
+
+# Identifies the release; scripts/release passes the git revision.
+# Declared last so that a new revision does not invalidate the layers above.
+ARG GIT_REVISION=unknown
+ARG BUILD_DATE=unknown
+LABEL org.opencontainers.image.source="https://github.com/ryuichi1208/Sledge" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.created="${BUILD_DATE}"
+ENV SLEDGE_RELEASE=${GIT_REVISION}
 
 # --env deployment disables Plack's development middleware.
 # On SIGTERM, Starlet finishes in-flight requests before exiting.
