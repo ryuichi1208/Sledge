@@ -84,6 +84,7 @@ Makefile.PL
 MANIFEST			This list of files
 META.yml			Module meta-data (added by MakeMaker)
 README
+scripts/e2e-chat
 scripts/release
 t/00_compile.t
 t/01_testproj.t

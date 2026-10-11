@@ -1,0 +1,4 @@
+# Tools for maintaining the GitHub Actions workflows (mise install)
+[tools]
+pinact = "3.1.2"
+actionlint = "1.7.12"

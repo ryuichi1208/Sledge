@@ -1,0 +1,52 @@
+#!/usr/bin/env perl
+# End-to-end check of the sample app and chat through the edge proxy, the way a
+# browser uses them. Exits non-zero on failure. CI runs it inside the kind cluster:
+#
+#   perl scripts/e2e-chat http://edge
+use Mojo::Base -strict;
+use Mojo::IOLoop;
+use Mojo::JSON qw(decode_json);
+use Mojo::UserAgent;
+use Test::More;
+
+my $base = shift // 'http://edge';
+alarm 60;	# fail instead of hanging in CI
+(my $ws_url = "$base/ws") =~ s/^http/ws/;
+
+my %ua = map { $_ => Mojo::UserAgent->new } qw(alice bob);
+for my $name (sort keys %ua) {
+    is $ua{$name}->get("$base/?name=$name")->result->code, 200, "$name signs in";
+    is $ua{$name}->get("$base/chat")->result->code, 200, "$name opens the chat page";
+}
+
+my(%tx, %got);
+for my $name (qw(alice bob)) {
+    $ua{$name}->websocket($ws_url => { Origin => $base } => sub {
+	my(undef, $tx) = @_;
+	return unless $tx->is_websocket;
+	$tx{$name} = $tx;
+	$tx->on(message => sub { push @{$got{$name}}, decode_json($_[1]) });
+    });
+    Mojo::IOLoop->one_tick until $tx{$name} && grep { $_->{type} eq 'welcome' } @{$got{$name} || []};
+}
+$tx{alice}->send({ json => { type => 'say', text => 'hello from alice' } });
+my $deadline = time + 10;
+Mojo::IOLoop->one_tick until (grep { ($_->{text} // '') eq 'hello from alice' } @{$got{bob} || []}) || time > $deadline;
+ok +(grep { ($_->{text} // '') eq 'hello from alice' && $_->{user} eq 'alice' } @{$got{bob} || []}),
+    'bob receives alice\'s message';
+
+my $code;
+my $anonymous = Mojo::UserAgent->new;	# keep a reference until the socket is closed
+$anonymous->websocket($ws_url => { Origin => $base } => sub {
+    $_[1]->on(finish => sub { $code = $_[1] });
+});
+Mojo::IOLoop->one_tick until defined $code;
+is $code, 4401, 'a socket without a session is closed with 4401';
+
+my $res = $ua{alice}->get("$base/ws" => {
+    Origin => 'https://evil.example', Upgrade => 'websocket', Connection => 'Upgrade',
+    'Sec-WebSocket-Key' => 'dGhlIHNhbXBsZSBub25jZQ==', 'Sec-WebSocket-Version' => 13,
+})->result;
+is $res->code, 403, 'a cross-site origin is rejected';
+
+done_testing;
