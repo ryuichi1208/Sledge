@@ -70,11 +70,18 @@ jobs:
 
       - name: Validate Kubernetes manifests
         run: |
-          for overlay in k8s/base k8s/local; do
+          kubeconform() {
+            # Gateway API and Envoy Gateway resources are validated with the CRDs catalog
+            docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e \
+              -strict -summary -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' -
+          }
+          for overlay in k8s/base k8s/local k8s/kind-gateway; do
             echo "== $overlay"
-            kubectl kustomize "$overlay" \
-              | docker run --rm -i ghcr.io/yannh/kubeconform:v0.8.0@sha256:faffaf43f95aa6425306e1ab8d6fcad72acb9049158f38e574c085ea1ec0f64e -strict -summary -
+            kubectl kustomize "$overlay" | kubeconform
           done
+          echo "== k8s/kind-gateway/gatewayclass.yaml"
+          kubeconform < k8s/kind-gateway/gatewayclass.yaml
 
   e2e:
     name: End-to-end on kind
@@ -128,10 +135,43 @@ jobs:
             kubectl -n sledge logs e2e; exit 1; }
           kubectl -n sledge logs e2e
 
+      - name: Install Envoy Gateway
+        env:
+          VERSION: v1.9.1
+          SHA256: 72b3971364f172eb0b9636c7142cc84ff695467bc065897958bde85a3c06cfd5
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/envoy-gateway.yaml" \
+            "https://github.com/envoyproxy/gateway/releases/download/$VERSION/install.yaml"
+          echo "$SHA256  $RUNNER_TEMP/envoy-gateway.yaml" | sha256sum -c -
+          kubectl apply --server-side -f "$RUNNER_TEMP/envoy-gateway.yaml"
+          kubectl -n envoy-gateway-system wait deploy/envoy-gateway --for=condition=Available --timeout=300s
+          kubectl apply -f k8s/kind-gateway/gatewayclass.yaml
+
+      - name: Release behind the Gateway
+        run: |
+          OVERLAY=k8s/kind-gateway SKIP_BUILD=1 scripts/release kind
+          kubectl -n sledge wait gateway/sledge --for=condition=Programmed --timeout=180s
+
+      - name: Check the app and the chat through the Gateway
+        run: |
+          image="sledge:${{ steps.rev.outputs.rev }}"
+          gateway="http://$(kubectl -n sledge get gateway sledge -o jsonpath='{.status.addresses[0].value}')"
+          kubectl -n sledge run e2e-gateway --image="$image" --restart=Never --overrides="$(cat <<JSON
+          {"spec": {"enableServiceLinks": false,
+            "containers": [{"name": "e2e", "image": "$image",
+              "command": ["perl", "/e2e/e2e-chat", "$gateway"],
+              "volumeMounts": [{"name": "e2e", "mountPath": "/e2e"}]}],
+            "volumes": [{"name": "e2e", "configMap": {"name": "e2e"}}]}}
+          JSON
+          )"
+          kubectl -n sledge wait pod/e2e-gateway --for=jsonpath='{.status.phase}'=Succeeded --timeout=120s || {
+            kubectl -n sledge logs e2e-gateway; exit 1; }
+          kubectl -n sledge logs e2e-gateway
+
       - name: Show cluster state on failure
         if: failure()
         run: |
-          kubectl -n sledge get pods -o wide
+          kubectl -n sledge get pods,gateway,httproute -o wide
           kubectl -n sledge describe pods
           kubectl -n sledge logs -l app.kubernetes.io/name=sledge --all-containers --tail=100
           kubectl -n sledge logs -l app.kubernetes.io/name=sledge-ws --tail=100

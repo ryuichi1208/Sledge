@@ -5,17 +5,42 @@
 #
 #   scripts/release kind                 build sledge:<rev>, load it into kind, apply k8s/local
 #   scripts/release push <repository>    build <repository>:<rev>, push it, set the tag in k8s/base
+#   scripts/release set-tag <repository> [rev]
+#                                        point k8s/base at an image CI already pushed (default: HEAD)
 #
 # The working tree must be clean (ALLOW_DIRTY=1 builds anyway, tagged "-dirty").
 # SKIP_BUILD=1 uses an already built image with the same tag (e.g. built by CI).
+# OVERLAY=k8s/kind-gateway deploys another kind overlay (default k8s/local).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; }
 case "${1:-}" in
-  kind|push) ;;
+  kind|push|set-tag) ;;
   *) usage; exit 1 ;;
 esac
+
+set_base_tag() {
+  sed -i.bak -E \
+    -e "s#^([[:space:]]+newName:[[:space:]]+).*#\\1$1#" \
+    -e "s#^([[:space:]]+newTag:[[:space:]]+).*#\\1$2#" \
+    k8s/base/kustomization.yaml
+  rm -f k8s/base/kustomization.yaml.bak
+  echo "k8s/base now deploys $1:$2; commit it, then: kubectl apply -k k8s/base"
+}
+
+# set-tag only edits k8s/base, so it may run with a dirty tree
+if [ "$1" = set-tag ]; then
+  repository="${2:?usage: scripts/release set-tag <repository> [rev]}"
+  tag="${3:-$(git rev-parse --short=12 HEAD)}"
+  # Refuse tags that were never published, so k8s/base never names a missing image
+  if ! docker buildx imagetools inspect "$repository:$tag" >/dev/null 2>&1; then
+    echo "error: $repository:$tag does not exist (has the release workflow finished?)" >&2
+    exit 1
+  fi
+  set_base_tag "$repository" "$tag"
+  exit 0
+fi
 
 dirty=""
 if [ -n "$(git status --porcelain)" ]; then
@@ -46,8 +71,8 @@ case "${1:-}" in
     image="sledge:$rev"
     build "$image"
     kind load docker-image "$image" --name "$cluster"
-    # k8s/local refers to sledge:local; point it at this release
-    kubectl kustomize k8s/local \
+    # The kind overlays refer to sledge:local; point them at this release
+    kubectl kustomize "${OVERLAY:-k8s/local}" \
       | sed "s#image: sledge:local\$#image: $image#" \
       | kubectl --context "$context" apply -f -
     for deploy in sledge sledge-ws; do
@@ -59,12 +84,7 @@ case "${1:-}" in
     repository="${2:?usage: scripts/release push <repository>}"
     build "$repository:$rev"
     docker push "$repository:$rev"
-    sed -i.bak -E \
-      -e "s#^([[:space:]]+newName:[[:space:]]+).*#\\1$repository#" \
-      -e "s#^([[:space:]]+newTag:[[:space:]]+).*#\\1$rev#" \
-      k8s/base/kustomization.yaml
-    rm -f k8s/base/kustomization.yaml.bak
-    echo "k8s/base now deploys $repository:$rev; commit it, then: kubectl apply -k k8s/base"
+    set_base_tag "$repository" "$rev"
     ;;
   *)
     usage

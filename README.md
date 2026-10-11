@@ -105,7 +105,11 @@ The image tag is the git revision, so each deployment names exactly one build:
 ```sh
 scripts/release kind                              # build sledge:<rev>, load it into kind, deploy k8s/local
 scripts/release push ghcr.io/ryuichi1208/sledge   # build and push <repo>:<rev>, set the tag in k8s/base
+scripts/release set-tag ghcr.io/ryuichi1208/sledge # point k8s/base at the image CI published for HEAD
 ```
+
+When CI publishes the images (see below), use `set-tag` rather than `push`, so that one tag never
+refers to two different builds. `set-tag` refuses tags that do not exist in the registry.
 
 The script refuses to build from a working tree with uncommitted changes. The revision is also
 stored in the image (`org.opencontainers.image.revision` label and `SLEDGE_RELEASE`), added to
@@ -115,7 +119,7 @@ every log line as `release`, and reported to OpenTelemetry as `service.version`.
 
 | Workflow | When | What it does |
 |---|---|---|
-| `ci.yml` | pull requests and pushes to `master` | Runs the tests against MySQL / PostgreSQL / Valkey, checks POD and `Makefile.PL`, lints the workflows (actionlint) and the manifests (kubeconform), then releases to a kind cluster and runs `scripts/e2e-chat` through the edge proxy |
+| `ci.yml` | pull requests and pushes to `master` | Runs the tests against MySQL / PostgreSQL / Valkey, checks POD and `Makefile.PL`, lints the workflows (actionlint) and the manifests (kubeconform, including the Gateway API resources), then releases to a kind cluster and runs `scripts/e2e-chat` through the nginx edge proxy and through Envoy Gateway |
 | `release.yml` | pushes to `master` | Builds the image for amd64 and arm64 on native runners, pushes `ghcr.io/ryuichi1208/sledge:<rev>` (no moving tags), and attaches a build provenance attestation |
 
 Actions are pinned to commit SHAs with [pinact](https://github.com/suzuki-shunsuke/pinact)
@@ -280,9 +284,10 @@ Notes:
   update) misses the messages sent in that window; if that matters, have the client fetch what it
   missed after reconnecting.
 - Clients must reconnect on close, with exponential backoff and jitter. See `eg/psgi/tmpl/root/chat.html`.
-- Behind an Ingress, raise the proxy read timeout above the ping interval
-  (for ingress-nginx, `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"`) and route `/ws` to the
-  `sledge-ws` Service. `eg/docker/nginx.conf` shows the equivalent nginx configuration.
+- Route `/ws` to the `sledge-ws` Service. With the Gateway API, include the `k8s/components/gateway`
+  component (an HTTPRoute) and point its `parentRefs` at your Gateway; it was verified with Envoy Gateway,
+  including a rolling update of the WebSocket server. With a plain reverse
+  proxy, raise its read timeout above the ping interval; `eg/docker/nginx.conf` shows an nginx configuration.
 - A process uses one CPU core; scale by adding pods.
 
 The sample chat (`eg/websocket`) reads the user name that the sample Sledge app stores in the session:
@@ -326,7 +331,16 @@ kubectl -n sledge port-forward svc/edge 8080:80          # app and chat at http:
 kubectl -n sledge port-forward svc/jaeger 16686:16686    # http://localhost:16686
 ```
 
-After rebuilding the image, run `kind load` again and then `kubectl -n sledge rollout restart deploy/sledge deploy/sledge-ws`.
+After rebuilding the image, run `kind load` again and then `kubectl -n sledge rollout restart deploy/sledge deploy/sledge-ws`
+(or use `scripts/release kind`, which does all of this with a revision tag).
+
+To try a real Gateway instead of the nginx stand-in, install Envoy Gateway and use `k8s/kind-gateway`:
+
+```sh
+kubectl apply --server-side -f https://github.com/envoyproxy/gateway/releases/download/v1.9.1/install.yaml
+kubectl apply -f k8s/kind-gateway/gatewayclass.yaml   # GatewayClass + EnvoyProxy (ClusterIP on kind)
+OVERLAY=k8s/kind-gateway scripts/release kind
+```
 
 ## Changes for current Perl
 
