@@ -1,0 +1,9 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Sledge on PSGI</title></head>
+<body>
+<h1>Hello, [% name || 'Sledge' | html %]!</h1>
+<p>Visits in this session: [% count %]</p>
+<form method="get"><input type="text" name="name"><input type="submit" value="Send"></form>
+</body>
+</html>

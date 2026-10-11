@@ -83,7 +83,14 @@ sub tempname {
 
 sub link {
     my($self, $path) = @_;
-    link $self->tempname, $path;
+    return 1 if link $self->tempname, $path;
+
+    # A hard link fails when the temporary directory and the destination are on
+    # different filesystems (e.g. a container volume), so copy instead
+    require Errno;
+    return unless $!{EXDEV} || $!{EPERM};
+    require File::Copy;
+    File::Copy::copy($self->tempname, $path);
 }
 
 1;

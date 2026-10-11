@@ -51,7 +51,9 @@ sub create_config {
 
 package Mock::Config;
 sub datasource {
-    return 'dbi:mysql:test', 'root', '';
+    return $ENV{SLEDGE_TEST_MYSQL_DSN} || 'dbi:mysql:test',
+	$ENV{SLEDGE_TEST_MYSQL_USER} || 'root',
+	$ENV{SLEDGE_TEST_MYSQL_PASSWORD} || '';
 }
 
 package main;

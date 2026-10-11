@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# kubectl apply -k k8s/
+resources:
+  - deployment.yaml
+  - service.yaml
+  - pdb.yaml
+
+images:
+  - name: sledge
+    newName: ghcr.io/ryuichi1208/sledge
+    newTag: latest
+
+configMapGenerator:
+  - name: sledge
+    literals:
+      - SLEDGE_WORKERS=4
+      - SLEDGE_MAX_REQS_PER_CHILD=1000
+      # Trust X-Forwarded-Proto / X-Forwarded-For behind an Ingress
+      - SLEDGE_BEHIND_PROXY=1
+      # Log format: json (default) / text; level: debug / info / warn / error
+      - SLEDGE_LOG_LEVEL=info
+      # Session store: auto / redis / dbi / cookie / none
+      - SLEDGE_SESSION_STORE=auto
+      # OpenTelemetry (OTLP/HTTP). Set OTEL_SDK_DISABLED=true if there is no collector
+      - OTEL_SERVICE_NAME=sledge
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector.observability:4318
+      - OTEL_TRACES_SAMPLER=parentbased_traceidratio
+      - OTEL_TRACES_SAMPLER_ARG=0.1
+
+# To share sessions across pods, put one of the following in a Secret (sledge-db).
+#   Redis / Valkey:
+#     kubectl create secret generic sledge-db --from-literal=SLEDGE_REDIS_SERVER=valkey:6379
+#   MySQL / PostgreSQL:
+#     kubectl create secret generic sledge-db \
+#       --from-literal=SLEDGE_DSN='dbi:mysql:database=sledge;host=mysql;mysql_ssl=1' \
+#       --from-literal=SLEDGE_DB_USER=sledge \
+#       --from-literal=SLEDGE_DB_PASSWORD=...
+#   Encrypted cookie (no database needed):
+#     kubectl create secret generic sledge-db --from-literal=SLEDGE_SESSION_SECRET="$(openssl rand -hex 32)"
+# If none is set, sessions only live for the duration of a request.

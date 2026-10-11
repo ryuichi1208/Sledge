@@ -7,7 +7,7 @@
 use strict;
 use Test::More;
 
-plan tests => 4;
+plan tests => 5;
 
 use lib "t/lib";
 
@@ -52,7 +52,8 @@ my $fh = FileHandle->new($session);
 ok $fh, "can read $session";
 
 my $body = do { local $/; <$fh> };
-my $data = Storable::thaw($body);
+like $body, qr/^\{/, "stored as JSON";
+my $data = Sledge::Session->_deserialize($body);
 
 is $data->{_url}, "http://localhost/";
 is $data->{foo}, "bar";

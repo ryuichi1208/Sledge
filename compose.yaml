@@ -1,0 +1,100 @@
+# Development environment
+#
+#   docker compose up -d             # start the sample app (http://localhost:5000) and the databases
+#                                    # traces are shown in the Jaeger UI (http://localhost:16686)
+#   docker compose run --rm dev prove -lr t   # run the tests (including the MySQL / PostgreSQL / Valkey tests)
+#   docker compose run --rm dev bash          # shell
+#
+x-dev: &dev
+  build:
+    context: .
+    target: dev
+  image: sledge-dev
+  working_dir: /app
+  volumes:
+    - .:/app
+
+x-app-env: &app-env
+  PERL5LIB: /app/lib
+  SLEDGE_DSN: dbi:mysql:database=sledge;host=mysql;mysql_ssl=1
+  SLEDGE_DB_USER: sledge
+  SLEDGE_DB_PASSWORD: sledge
+
+services:
+  dev:
+    <<: *dev
+    environment:
+      <<: *app-env
+      SLEDGE_TEST_MYSQL_DSN: dbi:mysql:database=test;host=mysql;mysql_ssl=1
+      SLEDGE_TEST_MYSQL_USER: root
+      SLEDGE_TEST_MYSQL_PASSWORD: root
+      SLEDGE_TEST_PG_DSN: dbi:Pg:dbname=test;host=postgres
+      SLEDGE_TEST_PG_USER: postgres
+      SLEDGE_TEST_PG_PASSWORD: postgres
+      SLEDGE_TEST_REDIS_SERVER: valkey:6379
+    depends_on:
+      mysql:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  app:
+    <<: *dev
+    depends_on:
+      mysql:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+      jaeger:
+        condition: service_started
+    environment:
+      <<: *app-env
+      SLEDGE_SESSION_STORE: redis
+      SLEDGE_REDIS_SERVER: valkey:6379
+      # traces are shown in the Jaeger UI at http://localhost:16686
+      OTEL_SERVICE_NAME: sledge-sample
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      SLEDGE_LOG_FORMAT: json
+    ports:
+      - "5000:5000"
+    # -R reloads the app when the source changes
+    # app.psgi writes JSON access logs, so disable plackup's default middleware
+    command: plackup -R lib,eg/psgi --no-default-middleware --host 0.0.0.0 --port 5000 eg/psgi/app.psgi
+
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: sledge
+      MYSQL_USER: sledge
+      MYSQL_PASSWORD: sledge
+    volumes:
+      - ./eg/docker/mysql-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 3s
+      retries: 30
+
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: test
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres"]
+      interval: 3s
+      retries: 30
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 3s
+      retries: 30
+
+  jaeger:
+    image: jaegertracing/jaeger:2.10.0
+    ports:
+      - "16686:16686"   # UI

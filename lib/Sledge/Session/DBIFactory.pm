@@ -7,7 +7,6 @@ package Sledge::Session::DBIFactory;
 
 use strict;
 use Sledge::Exceptions;
-use UNIVERSAL::require;
 
 use vars qw($DriverBindMap);
 $DriverBindMap = {
@@ -24,7 +23,8 @@ sub new {
 	or Sledge::Exception::NoDriverName->throw($dsn[0]);
     my $session_class = $DriverBindMap->{$driver}
 	or Sledge::Exception::SessionBindClassError->throw($driver);
-    $session_class->require or Sledge::Exception::LoadingModuleError->throw($UNIVERSAL::require::ERROR);
+    (my $file = "$session_class.pm") =~ s{::}{/}g;
+    eval { require $file; 1 } or Sledge::Exception::LoadingModuleError->throw($@);
     return $session_class->new($page, $sid);
 }
 

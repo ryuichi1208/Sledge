@@ -48,7 +48,7 @@ sub drop_sessions {
 my $dbh = eval { DBI->connect_cached(@{$Mock::Pages::DATASOURCE}, {
     AutoCommit => 1, RaiseError => 1, PrintError => 1,
 }); };
-plan $dbh ? 'no_plan' : 'skip_all' => 'DBD::SQLite failed';
+plan $dbh ? ('no_plan') : (skip_all => 'DBD::SQLite failed');
 
 create_sessions($dbh);
 

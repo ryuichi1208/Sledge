@@ -8,15 +8,10 @@ package Sledge::Charset::UTF8;
 use strict;
 use base qw(Sledge::Charset::Null);
 
-my($decode, $encode);
-BEGIN {
-    if ($] >= 5.006) {
-	require Encode::compat; # for 5.6 with Text::Iconv
-	require Encode;
-	$decode = sub { Encode::decode("UTF-8", shift) };
-	$encode = sub { Encode::encode("UTF-8", shift) };
-    }
-}
+use Encode ();
+
+my $decode = sub { Encode::decode("UTF-8", shift) };
+my $encode = sub { Encode::encode("UTF-8", shift) };
 
 sub convert_param {
     my($self, $page) = @_;
@@ -33,7 +28,8 @@ sub content_type {
 
 sub output_filter {
     my($self, $content) = @_;
-    return $encode->($content);
+    # If the template returned bytes, they are already UTF-8; return them as is
+    return utf8::is_utf8($content) ? $encode->($content) : $content;
 }
 
 1;

@@ -44,7 +44,7 @@ sub check_version {
 	$current_version = Sledge->VERSION;
     };
 
-    require "lib/Sledge.pm";
+    require "./lib/Sledge.pm";
     if ($current_version && $current_version < $Sledge::VERSION) {
 	warn <<WARN;
 

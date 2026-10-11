@@ -1,0 +1,37 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Overlay for running on a local kind cluster.
+# Runs Valkey (sessions) and Jaeger (traces) in the same namespace.
+#
+#   docker build -t sledge:local .
+#   kind load docker-image sledge:local --name sledge
+#   kubectl apply -k k8s/local
+#
+namespace: sledge
+
+resources:
+  - namespace.yaml
+  - ../base
+  - valkey.yaml
+  - jaeger.yaml
+
+images:
+  - name: ghcr.io/ryuichi1208/sledge
+    newName: sledge
+    newTag: local
+
+configMapGenerator:
+  - name: sledge
+    behavior: merge
+    literals:
+      - SLEDGE_WORKERS=2
+      - SLEDGE_BEHIND_PROXY=0
+      - SLEDGE_SESSION_STORE=redis
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318
+      - OTEL_TRACES_SAMPLER=always_on
+
+secretGenerator:
+  - name: sledge-db
+    literals:
+      - SLEDGE_REDIS_SERVER=valkey:6379

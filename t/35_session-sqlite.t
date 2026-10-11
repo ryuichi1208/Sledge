@@ -14,7 +14,7 @@ use Sledge::Session::SQLite;
 
 my $dbh;
 my $st = setup_table();
-plan $st ? 'no_plan' : skip_all => 'no sqlite install';
+plan $st ? ('no_plan') : (skip_all => 'no sqlite install');
 
 $SIG{INT} = sub { exit };
 END {
