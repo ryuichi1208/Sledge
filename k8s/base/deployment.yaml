@@ -21,6 +21,10 @@ spec:
         app.kubernetes.io/name: sledge
     spec:
       automountServiceAccountToken: false
+      # Without this, Kubernetes injects variables such as SLEDGE_WS_PORT=tcp://...
+      # and SLEDGE_SERVICE_HOST for every Service, which collide with the
+      # SLEDGE_* configuration read by Sledge::Config::Env
+      enableServiceLinks: false
       terminationGracePeriodSeconds: 30
       securityContext:
         runAsNonRoot: true

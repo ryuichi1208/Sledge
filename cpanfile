@@ -42,6 +42,10 @@ feature 'otel', 'OpenTelemetry tracing' => sub {
 feature 'redis', 'Redis / Valkey session store' => sub {
     requires 'Redis::Fast';
 };
+feature 'websocket', 'WebSocket server (Sledge::WebSocket)' => sub {
+    requires 'Mojolicious', '9.0';
+    requires 'Mojo::Redis', '3.0';
+};
 
 on test => sub {
     requires 'Test::More', '0.98';
