@@ -1,0 +1,29 @@
+# Cluster infrastructure (usually owned by the platform team): apply it together
+# with Envoy Gateway, separately from the namespaced app overlay.
+#
+#   kubectl apply --server-side -f https://github.com/envoyproxy/gateway/releases/download/v1.9.1/install.yaml
+#   kubectl apply -f k8s/kind-gateway/gatewayclass.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  # kind has no load balancer: expose the Envoy proxy as a ClusterIP Service
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: kind
+    namespace: envoy-gateway-system
+---
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: kind
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: ClusterIP

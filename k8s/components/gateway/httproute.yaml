@@ -1,0 +1,26 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: sledge
+spec:
+  parentRefs:
+    # The Gateway to attach to; patch this to your platform's Gateway
+    # (add "namespace:" when it lives in another namespace)
+    - name: sledge
+  rules:
+    # WebSocket upgrades are proxied as is; the server pings every 25s, so the
+    # connection is never idle long enough to hit the proxy's idle timeout
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /ws
+      backendRefs:
+        - name: sledge-ws
+          port: 80
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: sledge
+          port: 80
