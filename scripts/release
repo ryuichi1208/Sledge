@@ -7,10 +7,11 @@
 #   scripts/release push <repository>    build <repository>:<rev>, push it, set the tag in k8s/base
 #
 # The working tree must be clean (ALLOW_DIRTY=1 builds anyway, tagged "-dirty").
+# SKIP_BUILD=1 uses an already built image with the same tag (e.g. built by CI).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; }
+usage() { sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'; }
 case "${1:-}" in
   kind|push) ;;
   *) usage; exit 1 ;;
@@ -28,6 +29,10 @@ rev="$(git rev-parse --short=12 HEAD)$dirty"
 revision="$(git rev-parse HEAD)$dirty"
 
 build() {
+  if [ -n "${SKIP_BUILD:-}" ] && docker image inspect "$1" >/dev/null 2>&1; then
+    echo "using existing image $1"
+    return
+  fi
   docker build \
     --build-arg GIT_REVISION="$revision" \
     --build-arg BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \

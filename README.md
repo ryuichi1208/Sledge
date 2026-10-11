@@ -111,6 +111,18 @@ The script refuses to build from a working tree with uncommitted changes. The re
 stored in the image (`org.opencontainers.image.revision` label and `SLEDGE_RELEASE`), added to
 every log line as `release`, and reported to OpenTelemetry as `service.version`.
 
+### CI/CD: GitHub Actions
+
+| Workflow | When | What it does |
+|---|---|---|
+| `ci.yml` | pull requests and pushes to `master` | Runs the tests against MySQL / PostgreSQL / Valkey, checks POD and `Makefile.PL`, lints the workflows (actionlint) and the manifests (kubeconform), then releases to a kind cluster and runs `scripts/e2e-chat` through the edge proxy |
+| `release.yml` | pushes to `master` | Builds the image for amd64 and arm64 on native runners, pushes `ghcr.io/ryuichi1208/sledge:<rev>` (no moving tags), and attaches a build provenance attestation |
+
+Actions are pinned to commit SHAs with [pinact](https://github.com/suzuki-shunsuke/pinact)
+(`mise install` provides pinact and actionlint), and Dependabot proposes updates after a 14-day cooldown.
+To deploy a published image, set its tag in `k8s/base/kustomization.yaml`; verify it with
+`gh attestation verify oci://ghcr.io/ryuichi1208/sledge:<rev> --owner ryuichi1208`.
+
 ### Admin processes: `eg/psgi/admin.pl`
 
 One-off tasks run with the same image and configuration as the app:
