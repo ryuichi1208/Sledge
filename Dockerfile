@@ -86,9 +86,11 @@ WORKDIR /app
 # The source stays owned by root (read-only for the runtime user)
 COPY lib ./lib
 COPY eg/psgi ./eg/psgi
+COPY eg/websocket ./eg/websocket
 
 USER 10001:10001
-EXPOSE 5000
+# 5000: Sledge (Starlet), 5001: WebSocket server (eg/websocket/app.pl)
+EXPOSE 5000 5001
 
 # Point SLEDGE_PSGI at your own application to run it
 ENV SLEDGE_PSGI=/app/eg/psgi/app.psgi \

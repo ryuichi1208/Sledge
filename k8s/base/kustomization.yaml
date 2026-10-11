@@ -6,6 +6,7 @@ resources:
   - deployment.yaml
   - service.yaml
   - pdb.yaml
+  - ws.yaml
 
 images:
   - name: sledge

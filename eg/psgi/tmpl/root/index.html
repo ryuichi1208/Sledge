@@ -4,6 +4,7 @@
 <body>
 <h1>Hello, [% name || 'Sledge' | html %]!</h1>
 <p>Visits in this session: [% count %]</p>
-<form method="get"><input type="text" name="name"><input type="submit" value="Send"></form>
+<form method="get"><input type="text" name="name" placeholder="Your name"><input type="submit" value="Send"></form>
+[% IF name %]<p><a href="/chat">Open the chat</a></p>[% END %]
 </body>
 </html>

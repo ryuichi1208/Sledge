@@ -1,0 +1,128 @@
+# WebSocket server (Sledge::WebSocket). Long-lived connections are kept out of
+# the Starlet workers; route /ws here from the Ingress.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sledge-ws
+  labels:
+    app.kubernetes.io/name: sledge-ws
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sledge-ws
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sledge-ws
+    spec:
+      automountServiceAccountToken: false
+      # Without this, Kubernetes injects variables such as SLEDGE_WS_PORT=tcp://...
+      # and SLEDGE_SERVICE_HOST for every Service, which collide with the
+      # SLEDGE_* configuration read by Sledge::Config::Env
+      enableServiceLinks: false
+      # preStop (5s) + closing every client (SLEDGE_WS_CLOSE_TIMEOUT, 5s) must fit
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: sledge-ws
+      containers:
+        - name: sledge-ws
+          image: sledge
+          command: ["perl", "/app/eg/websocket/app.pl"]
+          ports:
+            - name: ws
+              containerPort: 5001
+          envFrom:
+            - configMapRef:
+                name: sledge
+            - secretRef:
+                name: sledge-db
+                optional: true
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: sledge-ws
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: k8s.pod.name=$(POD_NAME),k8s.namespace.name=$(POD_NAMESPACE)
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 256Mi
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: ws
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: ws
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: ws
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            # Wait until the pod is removed from the Service endpoints; then
+            # SIGTERM closes every client with 1001 so it reconnects elsewhere
+            preStop:
+              sleep:
+                seconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sledge-ws
+  labels:
+    app.kubernetes.io/name: sledge-ws
+spec:
+  selector:
+    app.kubernetes.io/name: sledge-ws
+  ports:
+    - name: ws
+      port: 80
+      targetPort: ws
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: sledge-ws
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sledge-ws

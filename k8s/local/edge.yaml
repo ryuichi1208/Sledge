@@ -1,0 +1,77 @@
+# Stands in for an Ingress on kind: / goes to the Sledge app, /ws to the WebSocket server.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: edge
+data:
+  default.conf: |
+    map $http_upgrade $connection_upgrade {
+        default upgrade;
+        ''      close;
+    }
+    server {
+        listen 8080;
+        location / {
+            proxy_pass http://sledge;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }
+        location /ws {
+            proxy_pass http://sledge-ws;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade $http_upgrade;
+            proxy_set_header Connection $connection_upgrade;
+            proxy_set_header Host $http_host;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Request-Id $request_id;
+            proxy_read_timeout 1h;
+            proxy_send_timeout 1h;
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: edge
+  labels:
+    app.kubernetes.io/name: edge
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: edge
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: edge
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.29-alpine
+          ports:
+            - name: http
+              containerPort: 8080
+          volumeMounts:
+            - name: conf
+              mountPath: /etc/nginx/conf.d
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+      volumes:
+        - name: conf
+          configMap:
+            name: edge
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: edge
+spec:
+  selector:
+    app.kubernetes.io/name: edge
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

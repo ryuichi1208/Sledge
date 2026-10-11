@@ -20,7 +20,7 @@ To use another version, pass the `PERL_VERSION` and `PERL_SHA256` build args.
 
 ```sh
 docker compose build
-docker compose up -d                      # sample app at http://localhost:5000, plus MySQL / PostgreSQL / Valkey / Jaeger
+docker compose up -d                      # sample app at http://localhost:5000 (with the chat at http://localhost:8000), plus MySQL / PostgreSQL / Valkey / Jaeger
 docker compose run --rm dev prove -lr t   # tests (including the MySQL / PostgreSQL / Valkey tests)
 docker compose run --rm dev bash          # shell
 ```
@@ -185,6 +185,58 @@ Sledge uses `Sledge::Tracing::SpanProcessor` instead, which exports synchronousl
 
 When a worker exits (SIGTERM or `max-reqs-per-child`), it exports its remaining spans first.
 
+## WebSocket: `Sledge::WebSocket`
+
+Sledge pages run on a prefork server (Starlet), where every open connection occupies a worker.
+Long-lived WebSocket connections would quickly use up the workers, so they are served by a
+separate event-loop process built on [Mojolicious](https://mojolicious.org/), and the Ingress
+routes `/ws` to it. It shares the Sledge session, logging and tracing.
+
+```perl
+package MyChat;
+use Mojo::Base 'Sledge::WebSocket', -signatures;
+use MyApp::Config;
+
+sub sledge_config ($self) { MyApp::Config->instance }
+
+sub on_open ($self, $conn) {
+    $conn->join('lobby');                     # resolves once the room is subscribed
+}
+
+sub on_message ($self, $conn, $data) {        # $data is the decoded JSON message
+    $self->broadcast(lobby => { user => $conn->session->{name}, text => $data->{text} });
+}
+
+sub on_close ($self, $conn, $code, $reason) { }
+
+# app.pl
+MyChat->new->run_server;                      # listens on SLEDGE_WS_PORT (default 5001)
+```
+
+| Feature | Behavior |
+|---|---|
+| Session | Read (read-only) from the Sledge session cookie, from `Sledge::Session::Redis` or `Sledge::SessionManager::EncryptedCookie`. Without a session the socket is closed with code **4401**, which the browser can see (a failed handshake would only show 1006) |
+| Origin check | The `Origin` must match the `Host`, or one of `SLEDGE_WS_ALLOWED_ORIGINS`; otherwise the handshake fails with 403. This stops other sites from opening sockets with the user's cookies |
+| Rooms | `$conn->join($room)` / `$app->broadcast($room, $data)`. With `SLEDGE_REDIS_SERVER`, messages go through Redis / Valkey pub/sub and reach clients on every pod |
+| Limits | Frames over `SLEDGE_WS_MAX_MESSAGE_SIZE` (64KiB) close with 1009; more than `SLEDGE_WS_RATE_LIMIT` (20) messages per second close with 1008 |
+| Keepalive | Pings every `SLEDGE_WS_PING_INTERVAL` (25s); idle sockets are closed after `SLEDGE_WS_IDLE_TIMEOUT` (60s) |
+| Shutdown | On SIGTERM, `/readyz` returns 503, new sockets are refused, and every client is closed with **1001** so it reconnects to another pod |
+| Observability | JSON logs through `Sledge::Logger`; `WS open` / `WS message` / `WS close` spans when tracing is enabled |
+
+Notes:
+
+- Messages are delivered at most once. A client that is reconnecting (for example during a rolling
+  update) misses the messages sent in that window; if that matters, have the client fetch what it
+  missed after reconnecting.
+- Clients must reconnect on close, with exponential backoff and jitter. See `eg/psgi/tmpl/root/chat.html`.
+- Behind an Ingress, raise the proxy read timeout above the ping interval
+  (for ingress-nginx, `nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"`) and route `/ws` to the
+  `sledge-ws` Service. `eg/docker/nginx.conf` shows the equivalent nginx configuration.
+- A process uses one CPU core; scale by adding pods.
+
+The sample chat (`eg/websocket`) reads the user name that the sample Sledge app stores in the session:
+open `/`, enter a name, then follow the link to `/chat`.
+
 ## Kubernetes
 
 ```sh
@@ -202,12 +254,16 @@ The manifests:
 - Wait 5 seconds in `preStop` before SIGTERM is sent. Starlet finishes in-flight requests before exiting.
   `preStop.sleep` requires Kubernetes 1.30 or later.
 - Add `k8s.pod.name` / `k8s.namespace.name` to traces.
+- Set `enableServiceLinks: false`. Otherwise Kubernetes injects variables such as `SLEDGE_WS_PORT=tcp://...`
+  for every Service, which collide with the `SLEDGE_*` configuration.
+- Run the WebSocket server as a separate Deployment (`sledge-ws`), with `/readyz` as its readiness probe.
 - Require sessions to live in Redis / Valkey, an RDBMS, or an encrypted cookie when running multiple pods.
   Do not use `Sledge::Session::File`, because files are not shared between pods.
 
 ### Running locally with kind
 
-`k8s/local` is an overlay that also runs Valkey and Jaeger in the same namespace.
+`k8s/local` is an overlay that also runs Valkey, Jaeger, and an nginx (`edge`) that stands in for an Ingress
+by routing `/ws` to the WebSocket server.
 
 ```sh
 kind create cluster --name sledge
@@ -215,11 +271,11 @@ docker build -t sledge:local .
 kind load docker-image sledge:local --name sledge
 kubectl apply -k k8s/local
 
-kubectl -n sledge port-forward svc/sledge 8080:80        # http://localhost:8080
+kubectl -n sledge port-forward svc/edge 8080:80          # app and chat at http://localhost:8080
 kubectl -n sledge port-forward svc/jaeger 16686:16686    # http://localhost:16686
 ```
 
-After rebuilding the image, run `kind load` again and then `kubectl -n sledge rollout restart deploy/sledge`.
+After rebuilding the image, run `kind load` again and then `kubectl -n sledge rollout restart deploy/sledge deploy/sledge-ws`.
 
 ## Changes for current Perl
 
