@@ -1,82 +1,83 @@
 =head1 NAME
 
-Sledge::Doc::Overview - Sledge フレームワーク概観
+Sledge::Doc::Overview - Overview of the Sledge framework
 
 =head1 DESCRIPTION
 
-Sledge フレームワークのアーキテクチャについて簡単に説明しています。
+This document briefly explains the architecture of the Sledge framework.
 
 
 =head1 LIFELINE
 
-Web サーバにやってきたHTTPリクエストを以下の順に処理します。(以下は概
-要であり、実装とは異なる部分があります)
+An HTTP request that arrives at the web server is processed in the
+following order. (This is an outline; some parts differ from the
+implementation.)
 
 =over 4
 
 =item *
 
-mod_perl (Apache::Registry) もしくは CGI スクリプトがトリガとなってアプリケーション(Pages)を起動
+mod_perl (Apache::Registry) or a CGI script acts as the trigger and starts the application (Pages)
 
 =item *
 
-プラグインのロード(任意)
+Load plugins (optional)
 
 =item *
 
-Sledge::Pages オブジェクトの生成
+Create the Sledge::Pages object
 
 =item *
 
-アプリケーションのConfig初期化
+Initialize the application Config
 
 =item *
 
-HTTPリクエストのパラメータ処理
+Process the HTTP request parameters
 
 =item *
 
-各Factoryオブジェクトの初期化
+Initialize each Factory object
 
 =item *
 
-セッションIDの取得/発行
+Get / issue the session ID
 
 =item *
 
-ストレージからのセッションの復元
+Restore the session from storage
 
 =item *
 
-ページにアクセスする権利を認証
+Authorize access to the page
 
 =item *
 
-文字コードのフィルタリング
+Filter character encodings
 
 =item *
 
-テンプレートエンジンのロード
+Load the template engine
 
 =item *
 
-アプリケーションクラスへのDispatch
+Dispatch to the application class
 
 =item *
 
-テンプレートエンジンの実行
+Run the template engine
 
 =item *
 
-スティッキーフォームの生成(必要に応じて)
+Generate sticky forms (as needed)
 
 =item *
 
-出力コンテンツのフィルタリング
+Filter the output content
 
 =item *
 
-サーバにレスポンスを返す
+Return the response to the server
 
 =back
 
