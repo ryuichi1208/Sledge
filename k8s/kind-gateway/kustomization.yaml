@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# k8s/local plus a real Gateway (Envoy Gateway) in front of the app and the
+# WebSocket server, instead of the nginx "edge" stand-in.
+#
+#   kubectl apply --server-side -f https://github.com/envoyproxy/gateway/releases/download/v1.9.1/install.yaml
+#   kubectl apply -f k8s/kind-gateway/gatewayclass.yaml
+#   OVERLAY=k8s/kind-gateway scripts/release kind
+#
+namespace: sledge
+
+resources:
+  - ../local
+  - gateway.yaml
+
+components:
+  - ../components/gateway

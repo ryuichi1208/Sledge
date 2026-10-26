@@ -1,0 +1,8 @@
+# Routes / to the Sledge app and /ws to the WebSocket server through a Gateway
+# API Gateway. Include it from an overlay on clusters that have the Gateway API
+# CRDs, and point parentRefs at your Gateway.
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+
+resources:
+  - httproute.yaml
